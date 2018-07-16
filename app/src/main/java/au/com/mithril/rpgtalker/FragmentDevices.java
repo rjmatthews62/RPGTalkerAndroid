@@ -7,7 +7,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ListView;
 
-public class FragmentTemp extends Fragment {
+public class FragmentDevices extends Fragment {
 
     ListView mDevices;
 
@@ -19,7 +19,7 @@ public class FragmentTemp extends Fragment {
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         // Inflate the layout for this fragment
-        View root=inflater.inflate(R.layout.fragment_temp, container, false);
+        View root=inflater.inflate(R.layout.fragment_devices, container, false);
         mDevices=root.findViewById(R.id.deviceList);
         mDevices.setChoiceMode(ListView.CHOICE_MODE_SINGLE);
         MainActivity main = getMain();

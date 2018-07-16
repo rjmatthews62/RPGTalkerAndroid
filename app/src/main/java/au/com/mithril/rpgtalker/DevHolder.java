@@ -16,11 +16,21 @@ public class DevHolder implements Comparable<DevHolder> {
         this.file = file;
     }
 
+    static long seconds(Date d) {
+        long diff=(new Date()).getTime()-d.getTime();
+        return diff/1000L;
+    }
     @Override
     public String toString() {
-        if (name != null && !name.isEmpty()) return name;
-        if (file != null) return file.getName();
-        return "(null)";
+        String result;
+        if (name != null && !name.isEmpty()) result = name;
+        else if (file != null) result = file.getName();
+        else result = "(null)";
+        if (lastSeen!=null) {
+            result+=" ("+seconds(lastSeen)+")";
+        }
+        if (isConnected) result+="*";
+        return result;
     }
 
     @Override
