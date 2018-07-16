@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/constraintLayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context=".MainActivity">
+
+    <Button
+        android:id="@+id/button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:onClick="onInfoClick"
+        android:text="Info" />
+
+    <Button
+        android:id="@+id/bluetoothToggle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:onClick="onBluetoothToggle"
+        android:text="Toggle Bluetooth" />
+
+    <Button
+        android:id="@+id/selectFolder"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:onClick="onSelectFolder"
+        android:text="Select Folder" />
+
+    <TextView
+        android:id="@+id/currentFolder"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Selected Folder" />
+
+    <TextView
+        android:id="@+id/currentDevice"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="TextView" />
+
+    <TextView
+        android:id="@+id/memo1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/activity_vertical_margin"
+        android:layout_marginEnd="@dimen/activity_horizontal_margin"
+        android:layout_marginStart="@dimen/activity_horizontal_margin"
+        android:layout_marginTop="@dimen/activity_vertical_margin"
+        android:gravity="bottom"
+        android:singleLine="false" />
+
+</LinearLayout>
