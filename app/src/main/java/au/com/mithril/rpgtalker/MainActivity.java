@@ -1,5 +1,6 @@
 package au.com.mithril.rpgtalker;
 
+import android.app.AlertDialog;
 import android.bluetooth.BluetoothA2dp;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -37,6 +38,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 
+import android.webkit.WebView;
 import android.widget.ArrayAdapter;
 import android.widget.ListAdapter;
 import android.widget.ListView;
@@ -316,9 +318,22 @@ public class MainActivity extends AppCompatActivity {
         } else if (id==R.id.keepAwake) {
             keepAwake();
             return true;
+        } else if (id==R.id.menuHelp) {
+            showHelp();
+            return true;
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    private void showHelp() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Help");
+// Set up the input
+        final WebView input = new WebView(this);
+        builder.setView(input);
+        input.loadUrl("file:///android_asset/help.html");
+        builder.show();
     }
 
     private void keepAwake() {

@@ -11,4 +11,9 @@
         android:id="@+id/keepAwake"
         android:orderInCategory="101"
         android:title="Keep Awake" />
+    <item
+        android:id="@+id/menuHelp"
+        android:icon="@android:drawable/ic_menu_help"
+        android:orderInCategory="102"
+        android:title="Help" />
 </menu>
