@@ -11,11 +11,14 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.media.MediaPlayer;
 import android.net.Uri;
+import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelUuid;
 import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
+import android.support.annotation.RequiresApi;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v4.provider.DocumentFile;
@@ -27,6 +30,7 @@ import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentPagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.os.Bundle;
+import android.util.ArraySet;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -43,8 +47,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -75,9 +82,11 @@ public class MainActivity extends AppCompatActivity {
     TextView memo1;
     BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
     private String mSoundFolder;
-    public ArrayAdapter<Destination>  mDestinations;
+    public ArrayAdapter<Destination> mDestinations;
     public ArrayAdapter<DocHolder> mSounds;
     private Destination mCurrentDest;
+    private List<DocHolder> mFileList;
+    private List<String> mCharacters = new ArrayList<>();
 
     public String getSoundFolder() {
         return mSoundFolder;
@@ -85,8 +94,8 @@ public class MainActivity extends AppCompatActivity {
 
     public void setSoundFolder(String mSoundFolder) {
         this.mSoundFolder = mSoundFolder;
-        populateDestinations();
         setText(R.id.currentFolder, getShortSound());
+        new LoadFiles().execute(mSoundFolder);
     }
 
     public String getShortSound() {
@@ -197,7 +206,6 @@ public class MainActivity extends AppCompatActivity {
         }
         return null;
     }
-
 
 
     @Override
@@ -356,7 +364,7 @@ public class MainActivity extends AppCompatActivity {
     public void connectDevice(BluetoothDevice bd) {
         Method connect = getConnectMethod();
         //If either is null, just return. The errors have already been logged
-        if (connect == null || bd == null || mA2DP==null) {
+        if (connect == null || bd == null || mA2DP == null) {
             addln("No method found.");
             return;
         }
@@ -370,7 +378,7 @@ public class MainActivity extends AppCompatActivity {
             addln("Illegal Access! " + ex.toString());
         }
     }
-    
+
     public void connectDevice(String address) {
         Set<BluetoothDevice> pairedDevices = mBluetoothAdapter.getBondedDevices();
         for (BluetoothDevice bd : pairedDevices) {
@@ -413,12 +421,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void updateConnected() {
-        String s=getConnectedString();
-        TextView t=findViewById(R.id.currentDevice);
-        if (t!=null && !t.getText().toString().equals(s)) refreshDevices();
+        String s = getConnectedString();
+        TextView t = findViewById(R.id.currentDevice);
+        if (t != null && !t.getText().toString().equals(s)) refreshDevices();
         setText(R.id.currentDevice, s);
-        setText(R.id.connectDev1,s);
-        setText(R.id.connectDev2,s);
+        setText(R.id.connectDev1, s);
+        setText(R.id.connectDev2, s);
     }
 
     public String getConnectedString() {
@@ -430,9 +438,9 @@ public class MainActivity extends AppCompatActivity {
                 if (!s.isEmpty()) s += "\n";
                 s += friendlyName(bd);
                 DevHolder h = findDevHolder(bd);
-                if (h!=null) {
-                    h.lastSeen=new Date();
-                    h.isConnected=true;
+                if (h != null) {
+                    h.lastSeen = new Date();
+                    h.isConnected = true;
                 }
 
             }
@@ -443,7 +451,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void clearConnected() {
         for (DevHolder h : devices) {
-            h.isConnected=false;
+            h.isConnected = false;
         }
     }
 
@@ -453,7 +461,7 @@ public class MainActivity extends AppCompatActivity {
         ArrayAdapter<DevHolder> la = new ArrayAdapter<DevHolder>(this, android.R.layout.simple_list_item_single_choice);
         la.addAll(devices);
         lv.setAdapter(la);
-        if (oldpos>=0) lv.setItemChecked(oldpos,true);
+        if (oldpos >= 0) lv.setItemChecked(oldpos, true);
     }
 
     public void setDeviceList(Spinner lv) {
@@ -463,7 +471,7 @@ public class MainActivity extends AppCompatActivity {
         la.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         la.addAll(devices);
         lv.setAdapter(la);
-        if (oldpos>=0) lv.setSelection(oldpos);
+        if (oldpos >= 0) lv.setSelection(oldpos);
     }
 
 
@@ -473,16 +481,16 @@ public class MainActivity extends AppCompatActivity {
 
     DevHolder getSelectedDevice() {
         ListView lv = findViewById(R.id.deviceList);
-        if (lv==null) return null;
-        int pos=lv.getCheckedItemPosition();
-        if (pos<0) return null;
+        if (lv == null) return null;
+        int pos = lv.getCheckedItemPosition();
+        if (pos < 0) return null;
         DevHolder h = (DevHolder) lv.getAdapter().getItem(pos);
         return h;
     }
 
     public void onConnect(View view) {
-        DevHolder h=getSelectedDevice();
-        if (h==null) return;
+        DevHolder h = getSelectedDevice();
+        if (h == null) return;
         disconnectAll();
         connectDevice(h.file);
     }
@@ -515,11 +523,11 @@ public class MainActivity extends AppCompatActivity {
 
     public void saveDestinations() {
         SharedPreferences.Editor e = mPreferences.edit();
-        for (int i=0; i<mDestinations.getCount(); i++) {
+        for (int i = 0; i < mDestinations.getCount(); i++) {
             Destination dest = (Destination) mDestinations.getItem(i);
-            String key=dest.getKey();
+            String key = dest.getKey();
             if (!dest.speaker) {
-                e.putString(key,dest.getAddress());
+                e.putString(key, dest.getAddress());
             }
         }
         e.apply();
@@ -531,50 +539,36 @@ public class MainActivity extends AppCompatActivity {
 
     public void setCurrentDest(Destination mCurrentDest) {
         this.mCurrentDest = mCurrentDest;
-        mSounds.clear();
-        if (mSoundFolder!=null && !mSoundFolder.isEmpty()) {
-            try {
-                Uri uri = Uri.parse(mSoundFolder);
-                DocumentFile docfile = DocumentFile.fromTreeUri(this, uri);
-                for (DocumentFile f : docfile.listFiles()) {
-                    if (f.isDirectory()) {
-                        if (mCurrentDest.speaker || (f.getName().equals(mCurrentDest.name))) {
-                            populateSubFolder(f);
-                        }
-                    } else if (f.isFile()) {
-                        mSounds.add(new DocHolder(f.getName(),f));
-                    }
-                }
-            } catch (Exception e) {
-                // Trap URI parsing error
-            }
-            mSounds.sort(new Comparator<DocHolder>() {
-                @Override
-                public int compare(DocHolder docHolder, DocHolder t1) {
-                    return docHolder.compareTo(t1);
-                }
-            });
-        }
+        populateSounds();
         ListView lv = findViewById(R.id.soundList);
-        if (lv!=null) lv.setAdapter(mSounds);
-        if (mCurrentDest.device!=null && mCurrentDest.device.file!=null) connectDevice(mCurrentDest.device.file);
+        if (lv != null) lv.setAdapter(mSounds);
+        if (mCurrentDest.device != null && mCurrentDest.device.file != null)
+            connectDevice(mCurrentDest.device.file);
         else disconnectAll();
         mViewPager.setCurrentItem(3);
     }
 
-    private void populateSubFolder(DocumentFile folder) {
-        for (DocumentFile f : folder.listFiles()) {
-            if (f.isFile()) {
-                DocHolder doc = new DocHolder(folder.getName()+":"+f.getName(),f);
-                mSounds.add(doc);
+    public void populateSounds() {
+        mSounds.clear();
+        if (mFileList != null) {
+            for (DocHolder doc : mFileList) {
+                if (doc.isGlobal() || mCurrentDest.speaker || doc.character.equals(mCurrentDest.name)) {
+                    mSounds.add(doc);
+                }
             }
         }
+        mSounds.sort(new Comparator<DocHolder>() {
+            @Override
+            public int compare(DocHolder dest, DocHolder source) {
+                return dest.compareTo(source);
+            }
+        });
     }
 
     public void stopPlaying() {
-        if (mPlayer!=null) {
+        if (mPlayer != null) {
             mPlayer.release();
-            mPlayer=null;
+            mPlayer = null;
         }
     }
 
@@ -598,8 +592,8 @@ public class MainActivity extends AppCompatActivity {
                     action.equals(BluetoothDevice.ACTION_ACL_DISCONNECTED) ||
                     action.equals(BluetoothDevice.ACTION_FOUND)) {
                 BluetoothDevice bd = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-                addln(action+" "+friendlyName(bd));
-                updateSeen(bd,new Date());
+                addln(action + " " + friendlyName(bd));
+                updateSeen(bd, new Date());
                 refreshDevices();
             } else if (action.equals(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)) {
                 addln("Discovery done.");
@@ -610,39 +604,30 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateSeen(BluetoothDevice bd, Date date) {
         DevHolder h = findDevHolder(bd);
-        if (h==null) return;
-        h.lastSeen=date;
+        if (h == null) return;
+        h.lastSeen = date;
     }
 
     private void populateDestinations() {
         mDestinations.clear();
-        Destination speakers=new Destination("Speakers",null);
-        speakers.speaker=true;
+        Destination speakers = new Destination("Speakers", null);
+        speakers.speaker = true;
         mDestinations.add(speakers);
-        if (mSoundFolder!=null && !mSoundFolder.isEmpty()) {
-            try {
-                Uri uri = Uri.parse(mSoundFolder);
-                DocumentFile docfile = DocumentFile.fromTreeUri(this, uri);
-                for (DocumentFile f : docfile.listFiles()) {
-                    if (f.isDirectory()) {
-                        mDestinations.add(new Destination(f.getName(),null));
-                    }
-                }
-            } catch (Exception e) {
-                // Trap URI parsing error
-            }
+        for (String name : mCharacters) {
+            mDestinations.add(new Destination(name, null));
         }
+
         mDestinations.sort(new Comparator<Destination>() {
             @Override
             public int compare(Destination dest, Destination source) {
                 return dest.compareTo(source);
             }
         });
-        for (int i=0; i<mDestinations.getCount(); i++) {
+        for (int i = 0; i < mDestinations.getCount(); i++) {
             Destination dest = mDestinations.getItem(i);
-            String address=mPreferences.getString(dest.getKey(),null);
-            if (address!=null) {
-                dest.device=findDevHolder(address);
+            String address = mPreferences.getString(dest.getKey(), null);
+            if (address != null) {
+                dest.device = findDevHolder(address);
             }
         }
         updateDestinationList();
@@ -650,7 +635,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateDestinationList() {
         ListView v = findViewById(R.id.destinations);
-        if (v!=null) {
+        if (v != null) {
             v.setAdapter(mDestinations);
         }
 
@@ -689,8 +674,8 @@ public class MainActivity extends AppCompatActivity {
         public Fragment getItem(int position) {
             Fragment result;
             if (position == 1) result = new FragmentDevices();
-            else if (position==2) result = new FragmentCharacters();
-            else if (position==3) result = new FragmentSounds();
+            else if (position == 2) result = new FragmentCharacters();
+            else if (position == 3) result = new FragmentSounds();
             else result = FragmentMain.newInstance(main);
             return result;
         }
@@ -698,6 +683,66 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public int getCount() {
             return 4;
+        }
+    }
+
+    public class LoadFiles extends AsyncTask<String, String, List<DocHolder>> {
+        Set<String> chars = new HashSet<>();
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+            addln("Loading sound files.");
+        }
+
+        @Override
+        protected List<DocHolder> doInBackground(String... strings) {
+            List<DocHolder> result = new ArrayList<>();
+            String soundfolder = strings.length > 0 ? strings[0] : null;
+            if (soundfolder != null && !soundfolder.isEmpty()) {
+                try {
+                    Uri uri = Uri.parse(mSoundFolder);
+                    DocumentFile docfile = DocumentFile.fromTreeUri(getApplicationContext(), uri);
+                    for (DocumentFile f : docfile.listFiles()) {
+                        if (f.isDirectory()) {
+                            populateSubFolder(f, result);
+                        } else if (f.isFile()) {
+                            result.add(new DocHolder(f.getName(), f));
+                        }
+                    }
+                } catch (Exception e) {
+                    publishProgress("Error: " + e.getMessage());
+                }
+
+                Collections.sort(result);
+            }
+            return result;
+        }
+
+        private void populateSubFolder(DocumentFile folder, List<DocHolder> dest) {
+            chars.add(folder.getName());
+            for (DocumentFile f : folder.listFiles()) {
+                if (f.isFile()) {
+                    DocHolder doc = new DocHolder(folder.getName() + ":" + f.getName(), f);
+                    doc.character = folder.getName();
+                    dest.add(doc);
+                }
+            }
+        }
+
+        @Override
+        protected void onProgressUpdate(String... values) {
+            super.onProgressUpdate(values);
+            for (String s : values) addln(s);
+        }
+
+        @Override
+        protected void onPostExecute(List<DocHolder> docHolders) {
+            addln("Files loaded. " + docHolders.size());
+            mCharacters = new ArrayList<>(chars);
+            mFileList = docHolders;
+            populateDestinations();
+            if (mCurrentDest != null) populateSounds();
         }
     }
 }
