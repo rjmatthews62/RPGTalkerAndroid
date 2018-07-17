@@ -20,6 +20,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelUuid;
 import android.preference.PreferenceManager;
+import android.provider.DocumentsContract;
 import android.support.annotation.Nullable;
 import android.support.annotation.RequiresApi;
 import android.support.design.widget.FloatingActionButton;
@@ -50,6 +51,8 @@ import java.io.InputStream;
 import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.FileNameMap;
+import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -77,6 +80,7 @@ public class MainActivity extends AppCompatActivity {
     Handler mainHandler = null;
     MyReceiver mReceiver = new MyReceiver();
     public static final int SOUND_FOLDER_READ = 1;
+    public static final int SOUND_FOLDER_GLOBAL = 2;
     public BluetoothA2dp mA2DP;
     Timer mTimer = null;
     public final static ArrayList<DevHolder> devices = new ArrayList<DevHolder>();
@@ -96,6 +100,7 @@ public class MainActivity extends AppCompatActivity {
     private Destination mCurrentDest;
     private List<DocHolder> mFileList;
     private List<String> mCharacters = new ArrayList<>();
+    private Uri mGlobalUri = null;
 
     public String getSoundFolder() {
         return mSoundFolder;
@@ -104,7 +109,8 @@ public class MainActivity extends AppCompatActivity {
     public void setSoundFolder(String mSoundFolder) {
         this.mSoundFolder = mSoundFolder;
         setText(R.id.currentFolder, getShortSound());
-        new LoadFiles().execute(mSoundFolder);
+        String gString = (mGlobalUri == null) ? null : mGlobalUri.toString();
+        new LoadFiles().execute(mSoundFolder, gString);
     }
 
     public String getShortSound() {
@@ -180,18 +186,22 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
             }
-        },10000,45000); // Check every 45 seconds.
+        }, 10000, 30000); // Check every 30 seconds.
         updateDeviceList();
+        String gString = mPreferences.getString("globalfolder", null);
+        if (gString != null) {
+            mGlobalUri = Uri.parse(gString);
+        }
         setSoundFolder(mPreferences.getString("soundfolder", null));
     }
 
     // This is called from timer thread.
     private void pingDevices() {
-        if (mDestinations==null) return;
-        for (int i=0; i<mDestinations.getCount(); i++) {
-          Destination d = mDestinations.getItem(i);
-          if (d.device==null) continue;
-          if (d.device.isConnected) continue; // Don't bother pinging connected devices.
+        if (mDestinations == null) return;
+        for (int i = 0; i < mDestinations.getCount(); i++) {
+            Destination d = mDestinations.getItem(i);
+            if (d.device == null) continue;
+            if (d.device.isConnected) continue; // Don't bother pinging connected devices.
             pingDevice(d.device.file);
         }
     }
@@ -264,6 +274,18 @@ public class MainActivity extends AppCompatActivity {
                 e.putString("soundfolder", mSoundFolder);
                 e.apply();
             }
+        } else if (requestCode == SOUND_FOLDER_GLOBAL) {
+            if (data == null) {
+                addln("No folder selected.");
+            } else {
+                addln("Global Folder=" + data.getData());
+                mGlobalUri = data.getData();
+                SharedPreferences.Editor e = mPreferences.edit();
+                e.putString("globalfolder", mGlobalUri.toString());
+                e.apply();
+                setSoundFolder(mSoundFolder); // Will reload sounds.
+            }
+
         }
         super.onActivityResult(requestCode, resultCode, data);
     }
@@ -315,15 +337,35 @@ public class MainActivity extends AppCompatActivity {
         if (id == R.id.menuUUID) {
             getDeviceDetails();
             return true;
-        } else if (id==R.id.keepAwake) {
+        } else if (id == R.id.keepAwake) {
             keepAwake();
             return true;
-        } else if (id==R.id.menuHelp) {
+        } else if (id == R.id.menuHelp) {
             showHelp();
             return true;
+        } else if (id == R.id.menuGlobal) {
+            chooseGlobal();
+            return true;
+        } else if (id == R.id.menuClearGlobal) {
+            clearGlobal();
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    private void clearGlobal() {
+        mGlobalUri=null;
+        addln("Clearing global folder.");
+        setSoundFolder(mSoundFolder);
+    }
+
+    private void chooseGlobal() {
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        i.addCategory(Intent.CATEGORY_DEFAULT);
+        if (mGlobalUri != null) {
+            i.putExtra(DocumentsContract.EXTRA_INITIAL_URI, mGlobalUri);
+        }
+        startActivityForResult(Intent.createChooser(i, "Choose Global Sounds"), SOUND_FOLDER_GLOBAL);
     }
 
     private void showHelp() {
@@ -347,22 +389,22 @@ public class MainActivity extends AppCompatActivity {
 
     private void pingDevice(BluetoothDevice bd) {
         UUID service = null;
-        if (bd==null) return;
-        addln("Ping "+friendlyName(bd));
+        if (bd == null) return;
+        addln("Ping " + friendlyName(bd));
         for (ParcelUuid uuid : bd.getUuids()) {
             // Look for AVRCP
-           if (uuid.toString().toUpperCase().startsWith("0000111E") ||
-                   uuid.toString().toUpperCase().startsWith("0000110E"))  {
-                  service=uuid.getUuid();
-                  break;
-           }
+            if (uuid.toString().toUpperCase().startsWith("0000111E") ||
+                    uuid.toString().toUpperCase().startsWith("0000110E")) {
+                service = uuid.getUuid();
+                break;
+            }
         }
-        if (service==null) {
+        if (service == null) {
             addln("No service found.");
             return;
         }
-        final UUID localService=service;
-        final BluetoothDevice localdevice=bd;
+        final UUID localService = service;
+        final BluetoothDevice localdevice = bd;
         Thread t = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -383,19 +425,20 @@ public class MainActivity extends AppCompatActivity {
 
     public void getDeviceDetails() {
         StringBuilder b = new StringBuilder("Device Details");
-        if (mA2DP==null || mA2DP.getConnectedDevices().size()==0) b.append("\nNo device connected.");
+        if (mA2DP == null || mA2DP.getConnectedDevices().size() == 0)
+            b.append("\nNo device connected.");
         else {
             for (BluetoothDevice bd : mA2DP.getConnectedDevices()) {
-                b.append("\n"+bd.getName()+" "+bd.getAddress());
-                b.append("\n"+friendlyName(bd));
-                b.append("\nClass="+bd.getBluetoothClass());
-                b.append("\nType="+bd.getType());
+                b.append("\n" + bd.getName() + " " + bd.getAddress());
+                b.append("\n" + friendlyName(bd));
+                b.append("\nClass=" + bd.getBluetoothClass());
+                b.append("\nType=" + bd.getType());
                 for (ParcelUuid uuid : bd.getUuids()) {
-                    b.append("\n"+uuid.toString());
+                    b.append("\n" + uuid.toString());
                 }
             }
         }
-        setText(R.id.memo1,b.toString());
+        setText(R.id.memo1, b.toString());
     }
 
     public void onInfoClick(View view) {
@@ -586,9 +629,9 @@ public class MainActivity extends AppCompatActivity {
 
     public void refreshDevices() {
         setDeviceList((ListView) findViewById(R.id.deviceList));
-        if (mDestinations!=null) {
+        if (mDestinations != null) {
             ListView lv = findViewById(R.id.destinations);
-            if (lv!=null) lv.invalidateViews();
+            if (lv != null) lv.invalidateViews();
         }
     }
 
@@ -639,7 +682,7 @@ public class MainActivity extends AppCompatActivity {
         for (int i = 0; i < mDestinations.getCount(); i++) {
             Destination dest = (Destination) mDestinations.getItem(i);
             String key = dest.getKey();
-            if (!dest.speaker) {
+            if (!(dest.speaker || dest.current)) {
                 e.putString(key, dest.getAddress());
             }
         }
@@ -657,7 +700,7 @@ public class MainActivity extends AppCompatActivity {
         if (lv != null) lv.setAdapter(mSounds);
         if (mCurrentDest.device != null && mCurrentDest.device.file != null)
             connectDevice(mCurrentDest.device.file);
-        else disconnectAll();
+        else if (mCurrentDest.speaker) disconnectAll();
         mViewPager.setCurrentItem(3);
     }
 
@@ -665,7 +708,7 @@ public class MainActivity extends AppCompatActivity {
         mSounds.clear();
         if (mFileList != null) {
             for (DocHolder doc : mFileList) {
-                if (doc.isGlobal() || mCurrentDest.speaker || doc.character.equals(mCurrentDest.name)) {
+                if (doc.isGlobal() || mCurrentDest.speaker || mCurrentDest.current || doc.character.equals(mCurrentDest.name)) {
                     mSounds.add(doc);
                 }
             }
@@ -723,9 +766,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void populateDestinations() {
         mDestinations.clear();
-        Destination speakers = new Destination("Speakers", null);
-        speakers.speaker = true;
-        mDestinations.add(speakers);
         for (String name : mCharacters) {
             mDestinations.add(new Destination(name, null));
         }
@@ -743,6 +783,12 @@ public class MainActivity extends AppCompatActivity {
                 dest.device = findDevHolder(address);
             }
         }
+        Destination speakers = new Destination("Speakers", null);
+        speakers.speaker = true;
+        mDestinations.add(speakers);
+        Destination current = new Destination("Current Device",null);
+        current.current=true;
+        mDestinations.add(current);
         updateDestinationList();
     }
 
@@ -812,24 +858,53 @@ public class MainActivity extends AppCompatActivity {
         protected List<DocHolder> doInBackground(String... strings) {
             List<DocHolder> result = new ArrayList<>();
             String soundfolder = strings.length > 0 ? strings[0] : null;
+            String globalSounds = strings.length > 1 ? strings[1] : null;
+            DocumentFile docfile = null;
+            Uri uri = null;
+
             if (soundfolder != null && !soundfolder.isEmpty()) {
                 try {
-                    Uri uri = Uri.parse(mSoundFolder);
-                    DocumentFile docfile = DocumentFile.fromTreeUri(getApplicationContext(), uri);
+                    uri = Uri.parse(soundfolder);
+                    docfile = DocumentFile.fromTreeUri(getApplicationContext(), uri);
                     for (DocumentFile f : docfile.listFiles()) {
                         if (f.isDirectory()) {
                             populateSubFolder(f, result);
-                        } else if (f.isFile()) {
+                        } else if (f.isFile() && isAudio(f.getUri())) {
                             result.add(new DocHolder(f.getName(), f));
                         }
                     }
                 } catch (Exception e) {
                     publishProgress("Error: " + e.getMessage());
                 }
-
-                Collections.sort(result);
             }
+            if (globalSounds != null && !globalSounds.isEmpty()) {
+                try {
+                    uri = Uri.parse(globalSounds);
+                    docfile = DocumentFile.fromTreeUri(getApplicationContext(), uri);
+                    for (DocumentFile f : docfile.listFiles()) {
+                        if (f.isFile() && isAudio(f.getUri())) {
+                            DocHolder h = new DocHolder(f.getName(), f);
+                            result.add(h);
+                        }
+                    }
+                } catch (Exception e) {
+                    publishProgress("Error: " + e.getMessage());
+                }
+            }
+            Collections.sort(result);
             return result;
+        }
+
+        public  String getMimeType(Uri fileUrl)
+        {
+            FileNameMap fileNameMap = URLConnection.getFileNameMap();
+            String type = fileNameMap.getContentTypeFor(fileUrl.toString());
+            return type;
+        }
+
+        public boolean isAudio(Uri fileUrl) {
+            String s=getMimeType(fileUrl);
+            return s!=null && s.startsWith("audio");
         }
 
         private void populateSubFolder(DocumentFile folder, List<DocHolder> dest) {

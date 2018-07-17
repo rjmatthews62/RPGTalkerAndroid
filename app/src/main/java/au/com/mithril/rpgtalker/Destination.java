@@ -6,6 +6,7 @@ class Destination implements Comparable<Destination>{
     String name;
     DevHolder device;
     public boolean speaker;
+    public boolean current;
 
     Destination(String name, DevHolder device) {
         this.name=name;
