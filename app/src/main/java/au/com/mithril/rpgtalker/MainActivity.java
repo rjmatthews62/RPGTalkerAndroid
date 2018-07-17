@@ -3,7 +3,9 @@ package au.com.mithril.rpgtalker;
 import android.bluetooth.BluetoothA2dp;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothHidDeviceAppSdpSettings;
 import android.bluetooth.BluetoothProfile;
+import android.bluetooth.BluetoothSocket;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -41,6 +43,9 @@ import android.widget.ListView;
 import android.widget.Spinner;
 import android.widget.TextView;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -54,6 +59,7 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.UUID;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -71,8 +77,9 @@ public class MainActivity extends AppCompatActivity {
     public static final int SOUND_FOLDER_READ = 1;
     public BluetoothA2dp mA2DP;
     Timer mTimer = null;
-    public final static ArrayList<DevHolder> devices = new ArrayList<>();
+    public final static ArrayList<DevHolder> devices = new ArrayList<DevHolder>();
     static MediaPlayer mPlayer;
+    SharedPreferences mPreferences;
 
 
     /**
@@ -109,7 +116,6 @@ public class MainActivity extends AppCompatActivity {
         return s;
     }
 
-    SharedPreferences mPreferences;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -162,8 +168,30 @@ public class MainActivity extends AppCompatActivity {
                 });
             }
         }, 1000, 1000);
+        mTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                mainHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        pingDevices();
+                    }
+                });
+            }
+        },10000,45000); // Check every 45 seconds.
         updateDeviceList();
         setSoundFolder(mPreferences.getString("soundfolder", null));
+    }
+
+    // This is called from timer thread.
+    private void pingDevices() {
+        if (mDestinations==null) return;
+        for (int i=0; i<mDestinations.getCount(); i++) {
+          Destination d = mDestinations.getItem(i);
+          if (d.device==null) continue;
+          if (d.device.isConnected) continue; // Don't bother pinging connected devices.
+            pingDevice(d.device.file);
+        }
     }
 
 
@@ -282,11 +310,77 @@ public class MainActivity extends AppCompatActivity {
         int id = item.getItemId();
 
         //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
+        if (id == R.id.menuUUID) {
+            getDeviceDetails();
+            return true;
+        } else if (id==R.id.keepAwake) {
+            keepAwake();
             return true;
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    private void keepAwake() {
+        addln("Attempt keep Awake.");
+        DevHolder h = getSelectedDevice();
+        if (h == null) return;
+        BluetoothDevice bd = h.file;
+        if (bd == null) return;
+        pingDevice(bd);
+    }
+
+    private void pingDevice(BluetoothDevice bd) {
+        UUID service = null;
+        if (bd==null) return;
+        addln("Ping "+friendlyName(bd));
+        for (ParcelUuid uuid : bd.getUuids()) {
+            // Look for AVRCP
+           if (uuid.toString().toUpperCase().startsWith("0000111E") ||
+                   uuid.toString().toUpperCase().startsWith("0000110E"))  {
+                  service=uuid.getUuid();
+                  break;
+           }
+        }
+        if (service==null) {
+            addln("No service found.");
+            return;
+        }
+        final UUID localService=service;
+        final BluetoothDevice localdevice=bd;
+        Thread t = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                addln("Connecting...");
+                try {
+                    BluetoothSocket socket = localdevice.createRfcommSocketToServiceRecord(localService);
+                    socket.connect();
+                    addln("Connected.");
+                    socket.close();
+                } catch (IOException e) {
+                    addln("Unble to create socket.");
+                    return;
+                }
+            }
+        });
+        t.start();
+    }
+
+    public void getDeviceDetails() {
+        StringBuilder b = new StringBuilder("Device Details");
+        if (mA2DP==null || mA2DP.getConnectedDevices().size()==0) b.append("\nNo device connected.");
+        else {
+            for (BluetoothDevice bd : mA2DP.getConnectedDevices()) {
+                b.append("\n"+bd.getName()+" "+bd.getAddress());
+                b.append("\n"+friendlyName(bd));
+                b.append("\nClass="+bd.getBluetoothClass());
+                b.append("\nType="+bd.getType());
+                for (ParcelUuid uuid : bd.getUuids()) {
+                    b.append("\n"+uuid.toString());
+                }
+            }
+        }
+        setText(R.id.memo1,b.toString());
     }
 
     public void onInfoClick(View view) {
@@ -477,6 +571,10 @@ public class MainActivity extends AppCompatActivity {
 
     public void refreshDevices() {
         setDeviceList((ListView) findViewById(R.id.deviceList));
+        if (mDestinations!=null) {
+            ListView lv = findViewById(R.id.destinations);
+            if (lv!=null) lv.invalidateViews();
+        }
     }
 
     DevHolder getSelectedDevice() {
