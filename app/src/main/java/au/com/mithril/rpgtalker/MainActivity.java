@@ -9,9 +9,12 @@ import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothSocket;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -81,6 +84,10 @@ public class MainActivity extends AppCompatActivity {
     MyReceiver mReceiver = new MyReceiver();
     public static final int SOUND_FOLDER_READ = 1;
     public static final int SOUND_FOLDER_GLOBAL = 2;
+    public static final int KEEP_AWAKE_NONE = 0;
+    public static final int KEEP_AWAKE_POLL = 0;
+    public static final int KEEP_AWAKE_CONNECT = 0;
+
     public BluetoothA2dp mA2DP;
     Timer mTimer = null;
     public final static ArrayList<DevHolder> devices = new ArrayList<DevHolder>();
@@ -348,14 +355,49 @@ public class MainActivity extends AppCompatActivity {
             return true;
         } else if (id == R.id.menuClearGlobal) {
             clearGlobal();
+            return true;
+        } else if (id == R.id.menuAbout) {
+            showAbout();
+            return true;
         }
 
         return super.onOptionsItemSelected(item);
     }
 
+    private void showAbout() {
+        PackageManager manager = this.getPackageManager();
+        PackageInfo info = null;
+        try {
+            info = manager.getPackageInfo(this.getPackageName(), 0);
+        } catch (PackageManager.NameNotFoundException e) {
+            e.printStackTrace();
+        }
+        String gString = "None";
+        if (mGlobalUri != null) gString = mGlobalUri.getLastPathSegment();
+        String vString = "Unknown";
+        if (info != null) vString = info.versionName;
+        showPrompt("RPGTalker " + vString, "Sound Folder:\n" + getShortSound() + "\nGlobal:\n" + gString);
+    }
+
+    void showPrompt(String title, String message) {
+        AlertDialog.Builder b = new AlertDialog.Builder(this);
+        b.setTitle(title);
+        b.setMessage(message);
+        b.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int i) {
+                dialog.cancel();
+            }
+        });
+        b.show();
+    }
+
     private void clearGlobal() {
-        mGlobalUri=null;
         addln("Clearing global folder.");
+        mGlobalUri = null;
+        SharedPreferences.Editor e = mPreferences.edit();
+        e.remove("globalfolder");
+        e.apply();
         setSoundFolder(mSoundFolder);
     }
 
@@ -786,8 +828,8 @@ public class MainActivity extends AppCompatActivity {
         Destination speakers = new Destination("Speakers", null);
         speakers.speaker = true;
         mDestinations.add(speakers);
-        Destination current = new Destination("Current Device",null);
-        current.current=true;
+        Destination current = new Destination("Current Device", null);
+        current.current = true;
         mDestinations.add(current);
         updateDestinationList();
     }
@@ -895,16 +937,15 @@ public class MainActivity extends AppCompatActivity {
             return result;
         }
 
-        public  String getMimeType(Uri fileUrl)
-        {
+        public String getMimeType(Uri fileUrl) {
             FileNameMap fileNameMap = URLConnection.getFileNameMap();
             String type = fileNameMap.getContentTypeFor(fileUrl.toString());
             return type;
         }
 
         public boolean isAudio(Uri fileUrl) {
-            String s=getMimeType(fileUrl);
-            return s!=null && s.startsWith("audio");
+            String s = getMimeType(fileUrl);
+            return s != null && s.startsWith("audio");
         }
 
         private void populateSubFolder(DocumentFile folder, List<DocHolder> dest) {
