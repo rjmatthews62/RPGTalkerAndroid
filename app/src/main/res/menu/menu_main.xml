@@ -21,12 +21,16 @@
         android:orderInCategory="102"
         android:title="Keep Awake" />
     <item
+        android:id="@+id/menuClearDevices"
+        android:orderInCategory="107"
+        android:title="Clear Devices" />
+    <item
         android:id="@+id/menuAbout"
-        android:orderInCategory="108"
+        android:orderInCategory="109"
         android:title="About" />
     <item
         android:id="@+id/menuHelp"
         android:icon="@android:drawable/ic_menu_help"
-        android:orderInCategory="107"
+        android:orderInCategory="108"
         android:title="Help" />
 </menu>

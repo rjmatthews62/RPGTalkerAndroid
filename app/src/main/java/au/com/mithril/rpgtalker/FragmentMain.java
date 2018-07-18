@@ -52,8 +52,10 @@ public class FragmentMain extends Fragment {
     @Override
     public void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
-        TextView m=getView().findViewById(R.id.memo1);
-        String s=m.getText().toString();
-        outState.putString("addln",s);
+        if (getView()!=null) {
+            TextView m = getView().findViewById(R.id.memo1);
+            String s = m.getText().toString();
+            outState.putString("addln", s);
+        }
     }
 }

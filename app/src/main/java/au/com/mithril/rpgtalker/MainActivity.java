@@ -4,6 +4,7 @@ import android.app.AlertDialog;
 import android.bluetooth.BluetoothA2dp;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothHeadset;
 import android.bluetooth.BluetoothHidDeviceAppSdpSettings;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothSocket;
@@ -90,6 +91,7 @@ public class MainActivity extends AppCompatActivity {
     public static final int KEEP_AWAKE_CONNECT = 2;
 
     public BluetoothA2dp mA2DP;
+    public BluetoothHeadset mHeadset;
     Timer mTimer = null;
     public final static ArrayList<DevHolder> devices = new ArrayList<DevHolder>();
     static MediaPlayer mPlayer;
@@ -113,6 +115,8 @@ public class MainActivity extends AppCompatActivity {
     public String getSoundFolder() {
         return mSoundFolder;
     }
+
+    public HfpMonitor mHfp = null;
 
     public void setSoundFolder(String mSoundFolder) {
         this.mSoundFolder = mSoundFolder;
@@ -172,6 +176,7 @@ public class MainActivity extends AppCompatActivity {
 
         registerReceiver(mReceiver, filter);
         mBluetoothAdapter.getProfileProxy(this, mProfileListener, BluetoothProfile.A2DP);
+        mBluetoothAdapter.getProfileProxy(this, mProfileListener, BluetoothProfile.HEADSET);
         mTimer = new Timer("ticker", true);
         mTimer.scheduleAtFixedRate(new TimerTask() {
             @Override
@@ -267,6 +272,9 @@ public class MainActivity extends AppCompatActivity {
         mTimer.cancel();
         unregisterReceiver(mReceiver);
         mBluetoothAdapter.cancelDiscovery();
+        if (mHfp!=null) {
+            mHfp.closeSocket();
+        }
         super.onDestroy();
     }
 
@@ -360,9 +368,22 @@ public class MainActivity extends AppCompatActivity {
         } else if (id == R.id.menuAbout) {
             showAbout();
             return true;
+        } else if (id==R.id.menuClearDevices) {
+            clearDevices();
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    private void clearDevices() {
+        SharedPreferences.Editor e = mPreferences.edit();
+        for (int i=0; i<mDestinations.getCount(); i++) {
+            Destination d = mDestinations.getItem(i);
+            e.remove(d.getKey());
+            d.device=null;
+        }
+        e.apply();
+        mDestinations.notifyDataSetChanged();
     }
 
     private void showAbout() {
@@ -423,11 +444,16 @@ public class MainActivity extends AppCompatActivity {
 
     private void keepAwake() {
         addln("Attempt keep Awake.");
+        if (mHfp!=null) {
+            mHfp.closeSocket();
+            mHfp=null;
+        }
         DevHolder h = getSelectedDevice();
         if (h == null) return;
         BluetoothDevice bd = h.file;
         if (bd == null) return;
-        pingDevice(bd);
+        mHfp=new HfpMonitor(this,bd);
+        (new Thread(mHfp)).start();
     }
 
     private void pingDevice(BluetoothDevice bd) {
@@ -550,6 +576,15 @@ public class MainActivity extends AppCompatActivity {
     private Method getDisconnectMethod() {
         try {
             return BluetoothA2dp.class.getDeclaredMethod("disconnect", BluetoothDevice.class);
+        } catch (NoSuchMethodException ex) {
+            addln("Unable to find disconnect(BluetoothDevice) method in BluetoothA2dp proxy.");
+            return null;
+        }
+    }
+
+    private Method getHeadsetDisconnect() {
+        try {
+            return BluetoothHeadset.class.getDeclaredMethod("disconnect", BluetoothDevice.class);
         } catch (NoSuchMethodException ex) {
             addln("Unable to find disconnect(BluetoothDevice) method in BluetoothA2dp proxy.");
             return null;
@@ -718,6 +753,25 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }
+        if (mHeadset != null) {
+            addln("Disconnecting headsets...");
+            Method disconnect = getHeadsetDisconnect();
+            if (disconnect == null) {
+                addln("No disconnect method found.");
+                return;
+            }
+            for (BluetoothDevice bd : mHeadset.getConnectedDevices()) {
+                disconnect.setAccessible(true);
+                try {
+                    disconnect.invoke(mHeadset, bd);
+                    addln("Disconnected.");
+                } catch (IllegalAccessException e) {
+                    addln("Illegal access! " + e.toString());
+                } catch (InvocationTargetException e) {
+                    addln("UNable to invoke disconnect.");
+                }
+            }
+        }
     }
 
     public void saveDestinations() {
@@ -850,13 +904,20 @@ public class MainActivity extends AppCompatActivity {
                 mA2DP = (BluetoothA2dp) proxy;
                 addln("Bluetooth A2DP found: " + proxy);
                 updateConnected();
+            } else if (profile == BluetoothProfile.HEADSET) {
+                addln("Bluetooth Headset found.");
+                mHeadset=(BluetoothHeadset) proxy;
             }
         }
 
         @Override
-        public void onServiceDisconnected(int i) {
-            mA2DP = null;
-            updateConnected();
+        public void onServiceDisconnected(int profile) {
+            if (profile==BluetoothProfile.A2DP) {
+                mA2DP = null;
+                updateConnected();
+            } else if (profile==BluetoothProfile.HEADSET) {
+                mHeadset=null;
+            }
         }
     };
 
