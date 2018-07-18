@@ -84,9 +84,10 @@ public class MainActivity extends AppCompatActivity {
     MyReceiver mReceiver = new MyReceiver();
     public static final int SOUND_FOLDER_READ = 1;
     public static final int SOUND_FOLDER_GLOBAL = 2;
+
     public static final int KEEP_AWAKE_NONE = 0;
-    public static final int KEEP_AWAKE_POLL = 0;
-    public static final int KEEP_AWAKE_CONNECT = 0;
+    public static final int KEEP_AWAKE_POLL = 1;
+    public static final int KEEP_AWAKE_CONNECT = 2;
 
     public BluetoothA2dp mA2DP;
     Timer mTimer = null;
