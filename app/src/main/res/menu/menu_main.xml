@@ -18,8 +18,10 @@
         android:title="Clear Global Sounds" />
     <item
         android:id="@+id/keepAwake"
+        android:enabled="false"
         android:orderInCategory="102"
-        android:title="Keep Awake" />
+        android:title="Keep Awake"
+        android:visible="false" />
     <item
         android:id="@+id/menuClearDevices"
         android:orderInCategory="107"

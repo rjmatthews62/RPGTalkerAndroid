@@ -657,6 +657,7 @@ public class MainActivity extends AppCompatActivity {
         setText(R.id.currentDevice, s);
         setText(R.id.connectDev1, s);
         setText(R.id.connectDev2, s);
+        redrawDevices();
     }
 
     public String getConnectedString() {
@@ -704,12 +705,33 @@ public class MainActivity extends AppCompatActivity {
         if (oldpos >= 0) lv.setSelection(oldpos);
     }
 
+    /**
+     * Redraw device lists without rebuilding the underlying list.
+     */
+    public void redrawDevices() {
+        redrawlist(R.id.deviceList);
+        redrawlist(R.id.destinations);
+    }
+
+    /**
+     * Minimalist list refresh.
+     *
+     * @param id View resource id.
+     */
+    public void redrawlist(int id) {
+        ListView v = findViewById(id);
+        if (v!=null) {
+            ArrayAdapter a=(ArrayAdapter) v.getAdapter();
+            if (a!=null) a.notifyDataSetChanged();
+        }
+    }
 
     public void refreshDevices() {
         setDeviceList((ListView) findViewById(R.id.deviceList));
         if (mDestinations != null) {
-            ListView lv = findViewById(R.id.destinations);
-            if (lv != null) lv.invalidateViews();
+//            ListView lv = findViewById(R.id.destinations);
+//            if (lv != null) lv.invalidateViews();
+            redrawlist(R.id.destinations);
         }
     }
 
