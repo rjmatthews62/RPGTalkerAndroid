@@ -791,6 +791,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             for (BluetoothDevice bd : mA2DP.getConnectedDevices()) {
+                disconnectHfp(bd);
                 disconnect.setAccessible(true);
                 try {
                     disconnect.invoke(mA2DP, bd);
@@ -810,6 +811,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             for (BluetoothDevice bd : mHeadset.getConnectedDevices()) {
+                disconnectHfp(bd);
                 disconnect.setAccessible(true);
                 try {
                     disconnect.invoke(mHeadset, bd);
@@ -821,6 +823,11 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }
+    }
+
+    private void disconnectHfp(BluetoothDevice bd) {
+        DevHolder h = findDevHolder(bd);
+        if (h!=null && h.hasHfp()) h.closeHfp();
     }
 
     public void saveDestinations() {
