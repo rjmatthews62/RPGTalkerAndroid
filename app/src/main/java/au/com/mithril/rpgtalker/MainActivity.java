@@ -111,6 +111,7 @@ public class MainActivity extends AppCompatActivity {
     private List<DocHolder> mFileList;
     private List<String> mCharacters = new ArrayList<>();
     private Uri mGlobalUri = null;
+    private boolean mHfpStrategy = false;
 
     public String getSoundFolder() {
         return mSoundFolder;
@@ -206,6 +207,7 @@ public class MainActivity extends AppCompatActivity {
             mGlobalUri = Uri.parse(gString);
         }
         setSoundFolder(mPreferences.getString("soundfolder", null));
+        setHfpStrategy(mPreferences.getBoolean("hfpstrategy",false));
     }
 
     // This is called from timer thread.
@@ -215,10 +217,14 @@ public class MainActivity extends AppCompatActivity {
             Destination d = mDestinations.getItem(i);
             if (d.device == null) continue;
             if (d.device.isConnected) continue; // Don't bother pinging connected devices.
-            pingDevice(d.device.file);
+            if (mHfpStrategy) {
+                if (!d.device.hasHfp()) d.device.startHfp(this);
+                else if (d.device.hfpConnected())  d.device.lastSeen=new Date();
+            } else {
+                pingDevice(d.device.file);
+            }
         }
     }
-
 
     private void updateDeviceList() {
         Set<BluetoothDevice> paired = mBluetoothAdapter.getBondedDevices();
@@ -275,6 +281,7 @@ public class MainActivity extends AppCompatActivity {
         if (mHfp!=null) {
             mHfp.closeSocket();
         }
+        closeAllHfp();
         super.onDestroy();
     }
 
@@ -339,6 +346,7 @@ public class MainActivity extends AppCompatActivity {
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.menu_main, menu);
+        menu.findItem(R.id.menu_keepawake_strategy).setChecked(mHfpStrategy);
         return true;
     }
 
@@ -370,10 +378,29 @@ public class MainActivity extends AppCompatActivity {
             return true;
         } else if (id==R.id.menuClearDevices) {
             clearDevices();
+        } else if (id==R.id.menu_keepawake_strategy) {
+            setHfpStrategy(!mHfpStrategy);
+            item.setChecked(mHfpStrategy);
+            SharedPreferences.Editor e=mPreferences.edit();
+            e.putBoolean("hfpstrategy",mHfpStrategy);
+            e.apply();
         }
 
         return super.onOptionsItemSelected(item);
     }
+
+    public void setHfpStrategy(boolean newstrat) {
+        if (mHfpStrategy==newstrat) return;
+        mHfpStrategy=newstrat;
+        closeAllHfp();
+    }
+
+    private void closeAllHfp() {
+        for (DevHolder h : devices) {
+            h.closeHfp();
+        }
+    }
+
 
     private void clearDevices() {
         SharedPreferences.Editor e = mPreferences.edit();

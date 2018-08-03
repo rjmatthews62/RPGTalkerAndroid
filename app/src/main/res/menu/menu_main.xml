@@ -28,11 +28,18 @@
         android:title="Clear Devices" />
     <item
         android:id="@+id/menuAbout"
-        android:orderInCategory="109"
+        android:orderInCategory="110"
         android:title="About" />
     <item
         android:id="@+id/menuHelp"
         android:icon="@android:drawable/ic_menu_help"
         android:orderInCategory="108"
         android:title="Help" />
+    <item
+        android:id="@+id/menu_keepawake_strategy"
+        android:checkable="true"
+        android:enabled="true"
+        android:orderInCategory="109"
+        android:title="HFP Keep Awake"
+        android:visible="true" />
 </menu>
