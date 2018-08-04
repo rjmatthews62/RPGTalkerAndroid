@@ -127,7 +127,7 @@ public class HfpMonitor implements Runnable {
             addln("Connected.");
             input = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
             output = new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8);
-            for (; ; ) {
+            while (input!=null) {
                 String s = input.readLine();
                 if (s == null) break;
                 s = s.trim();

@@ -34,6 +34,7 @@ public class DevHolder implements Comparable<DevHolder> {
         if (hfp!=null) {
             if (hfp.isConnected()) result+="H";
             else if (hfp.isRunning()) result+="h";
+            if (hfp.batteryLevel>=0) result+=" B"+hfp.batteryLevel;
         }
         return result;
     }

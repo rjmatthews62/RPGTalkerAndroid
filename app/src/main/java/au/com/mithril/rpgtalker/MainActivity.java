@@ -343,6 +343,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    public void onBackPressed() {
+        int index=mViewPager.getCurrentItem();
+        if (index>0) mViewPager.setCurrentItem(index-1);
+        else
+        {
+            askExit();
+        }
+    }
+
+    @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.menu_main, menu);
@@ -436,6 +446,25 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(DialogInterface dialog, int i) {
                 dialog.cancel();
+            }
+        });
+        b.show();
+    }
+
+    void askExit() {
+        AlertDialog.Builder b = new AlertDialog.Builder(this);
+        b.setTitle("RPGTalker");
+        b.setMessage("Hit OK to close RPGTalker");
+        b.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int i) {
+                finish();
+            }
+        });
+        b.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int i) {
+                dialog.dismiss();
             }
         });
         b.show();
@@ -783,6 +812,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void disconnectAll() {
+        disconnectAll(null);
+    }
+
+    private void disconnectAll(BluetoothDevice current) {
         if (mA2DP != null) {
             addln("Disconnecting...");
             Method disconnect = getDisconnectMethod();
@@ -792,14 +825,16 @@ public class MainActivity extends AppCompatActivity {
             }
             for (BluetoothDevice bd : mA2DP.getConnectedDevices()) {
                 disconnectHfp(bd);
-                disconnect.setAccessible(true);
-                try {
-                    disconnect.invoke(mA2DP, bd);
-                    addln("Disconnected.");
-                } catch (IllegalAccessException e) {
-                    addln("Illegal access! " + e.toString());
-                } catch (InvocationTargetException e) {
-                    addln("UNable to invoke disconnect.");
+                if (current==null || !current.getAddress().equals(bd.getAddress())) {
+                    disconnect.setAccessible(true);
+                    try {
+                        disconnect.invoke(mA2DP, bd);
+                        addln("Disconnected.");
+                    } catch (IllegalAccessException e) {
+                        addln("Illegal access! " + e.toString());
+                    } catch (InvocationTargetException e) {
+                        addln("UNable to invoke disconnect.");
+                    }
                 }
             }
         }
@@ -851,9 +886,10 @@ public class MainActivity extends AppCompatActivity {
         populateSounds();
         ListView lv = findViewById(R.id.soundList);
         if (lv != null) lv.setAdapter(mSounds);
-        if (mCurrentDest.device != null && mCurrentDest.device.file != null)
+        if (mCurrentDest.device != null && mCurrentDest.device.file != null) {
+            disconnectAll(mCurrentDest.device.file);
             connectDevice(mCurrentDest.device.file);
-        else if (mCurrentDest.speaker) disconnectAll();
+        } else if (mCurrentDest.speaker) disconnectAll();
         mViewPager.setCurrentItem(3);
     }
 
