@@ -21,7 +21,7 @@ sounds meant only for that character. Sound files in the main folder are for all
     <li>Dusty</li>
 </ul>
 <h2>Screens</h2>
-<p><i>Swipe left or right to select other screens.</i></p></i>
+<p><i>Swipe left or right to select other screens. Hitting the <b>BACK</b> button will go left. Hitting back at the first screen will quit the application.</i></p>
 <h3>Main</h3>
 <p><b>INFO</b> lists paired devices, and does a discovery to see which devices are within range.</p>
 <p><b>TOGGLE BLUETOOTH</b> toggles the bluetooth adapter on or off.</p>
@@ -38,13 +38,26 @@ sounds meant only for that character. Sound files in the main folder are for all
 <p><i>Note that it takes a few seconds to connect. The currently selected device is displayed at the top of the screen. You need to wait for this to update before trying to play messages.</i></p>
 <h2>Menu Options</h2>
 <p><b>Details</b> Show details on the currently selected device.</p>
-<p><b>Keep Awake</b> Attempt to connect to selected device to keep it awake. (Debugging)</p>
 <p><b>Global Sounds</b> Select a folder include in addition to the selected sound folder.</p>
 <p><b>Clear Global Sounds</b> Clear the global folder settings.</p>
+<p><b>HFP Keep Awake</b> Switch between Ping and HFP keepawake strategies.</p>
 <p><b>Help</b> This screen.</p>
+<p><b>About</b> Details about RPGTalker.</p>
 <h2>Keep Awake</h2>
-<p>Every 30 seconds RPG Talker will attempt to connect to all devices associated with characters to keep them awake. Some headsets will beep when this happens. This is a
-limitation of the technology. Also, the keep-awake will only function while the RPGTalker is active. For long sessions, disable the screen timeout on your Android device.</p>
+<p>Non-connected earpieces will often power down after a short period to save battery. RPGTalker uses one of two techniques to keep the devices awake when not currently in use.
+<ul>
+    <li><b>Ping</b> The default, pings the device every 30 seconds. This may result in annoying beeps, but should in theory work for a potentially large number of devics.</li>
+    <li><b>HFP</b> will attempt to connect via the HFP protocol and keep that connection open indefinitely. This is much more reliable and less disruptive, but due to bluetooth limitations is only good for up to 7 devices at a time.</li>
+</ul>
+<p>The keep-awake will only function while the RPGTalker is active. For long sessions, disable the screen timeout on your Android device.</p>
 <h2>Stop</h2>
 <p>The <b>Stop</b> button is on the lower right of all screens and will stop the current sound playing.</p>
-
+<h2>Device Details</h2>
+<p>When the device is displayed, it looks like the following:
+    <br><b>S530 Blue(9)*</b>
+    <br><b>Phillip SH550(0)H B5</b>
+    <br>(9) = time in seconds since last seen. If this number gets much above 30, the device is probably powered down.
+    <br>* = connected (to the sound system, A2DP)
+    <br>h=attempting HFP connection, H=HFP connection established. (Only occurs if HFP Keep Awake is selected.)
+    <br>B5=battery level, which is between 1 and 9. Not available on all devices. Only updated in HFP mode.
+</p>

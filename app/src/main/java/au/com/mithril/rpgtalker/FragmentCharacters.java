@@ -1,6 +1,7 @@
 package au.com.mithril.rpgtalker;
 
 import android.app.AlertDialog;
+import android.bluetooth.BluetoothDevice;
 import android.content.DialogInterface;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
@@ -9,6 +10,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.Spinner;
@@ -45,6 +47,7 @@ public class FragmentCharacters extends Fragment {
         return root;
     }
 
+    @SuppressWarnings("unchecked")
     void linkDestination(Destination dest) {
         AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
         builder.setTitle("Set Destination");
@@ -54,10 +57,14 @@ public class FragmentCharacters extends Fragment {
         final Spinner input = new Spinner(getContext());
         final MainActivity main = (MainActivity) getActivity();
         main.setDeviceList(input);
-        if (dest.device!=null) {
+        ArrayAdapter<DevHolder> la = (ArrayAdapter) input.getAdapter();
+        DevHolder none=new DevHolder("None",null);
+        la.insert(none, 0);
+        if (dest.device!=null && dest.device.file!=null) {
+            String addr=dest.device.file.getAddress();
             for(int i=0; i<input.getCount(); i++) {
                 DevHolder h = (DevHolder) input.getItemAtPosition(i);
-                if (h.file.equals(dest.device)) {
+                if (h.file!=null && h.file.getAddress().equals(addr)) {
                     input.setSelection(i);
                     break;
                 }
@@ -67,12 +74,14 @@ public class FragmentCharacters extends Fragment {
 
 // Set up the buttons
         builder.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+            @SuppressWarnings("unchecked")
             @Override
             public void onClick(DialogInterface dialog, int which) {
-                localdest.device=(DevHolder) input.getSelectedItem();
+                DevHolder h = (DevHolder) input.getSelectedItem();
+                if (h.file==null) localdest.device=null;
+                else localdest.device=h;
                 main.saveDestinations();
-                mDestinations.setAdapter(null);
-                mDestinations.setAdapter(main.mDestinations);
+                ((ArrayAdapter<Destination>) mDestinations.getAdapter()).notifyDataSetChanged();
             }
         });
         builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {

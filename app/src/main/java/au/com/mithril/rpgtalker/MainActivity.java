@@ -615,6 +615,34 @@ public class MainActivity extends AppCompatActivity {
         return result;
     }
 
+    private Method setActiveDeviceMethod() {
+        Method m=null;
+        try {
+            m=BluetoothA2dp.class.getDeclaredMethod("setActiveDevice",BluetoothDevice.class);
+        } catch (NoSuchMethodException e) {
+            addln(e.getClass().getName()+":"+e.getMessage());
+        }
+        return m;
+    }
+
+    public boolean setActiveDevice(BluetoothDevice bd) {
+        boolean result=false;
+        if (mA2DP!=null) {
+            Method m=setActiveDeviceMethod();
+            if (m!=null) {
+                try {
+                    result=(boolean) m.invoke(mA2DP,bd);
+                } catch (IllegalAccessException e) {
+                    addln(e.getClass().getName()+":"+e.getMessage());
+                } catch (InvocationTargetException e) {
+                    addln(e.getClass().getName()+":"+e.getMessage());
+                }
+            }
+
+        }
+        return result;
+    }
+
     /**
      * Wrapper around some reflection code to get the hidden 'connect()' method
      *
@@ -635,6 +663,20 @@ public class MainActivity extends AppCompatActivity {
         } catch (NoSuchMethodException ex) {
             addln("Unable to find disconnect(BluetoothDevice) method in BluetoothA2dp proxy.");
             return null;
+        }
+    }
+
+    public void disconnectA2DP(BluetoothDevice bd) {
+        if (mA2DP==null) return;
+        try {
+            Method m = BluetoothA2dp.class.getDeclaredMethod("disconnect", BluetoothDevice.class);
+            m.invoke(mA2DP,bd);
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        } catch (InvocationTargetException e) {
+            e.printStackTrace();
+        } catch (NoSuchMethodException e) {
+            e.printStackTrace();
         }
     }
 
@@ -791,6 +833,29 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /** Force the selected device to be active... I hope. */
+    public boolean checkConnected() {
+        if (mCurrentDest==null || mCurrentDest.device==null || mCurrentDest.speaker || mCurrentDest.current) return false;
+        if (mA2DP==null) return false;
+        BluetoothDevice currdevice=mCurrentDest.device.file;
+        List<BluetoothDevice> dlist= mA2DP.getConnectedDevices();
+        if (dlist.size()<1) return false;
+        BluetoothDevice active=dlist.get(dlist.size()-1); // Empirically, last device on list is the the active one.
+        if (active.getAddress().equals(currdevice.getAddress())) return true; // That should be OK.
+        disconnectA2DP(currdevice);
+        connectDevice(currdevice); // This will HOPEFULLY make the one we want active.
+        return true;
+    }
+
+    public boolean disconnectUnwanted() {
+        if (mCurrentDest==null || mCurrentDest.device==null || mCurrentDest.speaker || mCurrentDest.current) return false;
+        if (mA2DP==null) return false;
+        List<BluetoothDevice> dlist=mA2DP.getConnectedDevices();
+        if (dlist.size()<1) return false;
+        disconnectA2DP(dlist.get(0));
+        return true;
+    }
+
     DevHolder getSelectedDevice() {
         ListView lv = findViewById(R.id.deviceList);
         if (lv == null) return null;
@@ -860,6 +925,16 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private boolean isMonitoring(BluetoothDevice bd) {
+        for (int i=0; i<mDestinations.getCount(); i++) {
+            Destination d = mDestinations.getItem(i);
+            if (d.device!=null && d.device.file!=null && d.device.file.getAddress().equals(bd.getAddress())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void disconnectHfp(BluetoothDevice bd) {
         DevHolder h = findDevHolder(bd);
         if (h!=null && h.hasHfp()) h.closeHfp();
@@ -871,7 +946,8 @@ public class MainActivity extends AppCompatActivity {
             Destination dest = (Destination) mDestinations.getItem(i);
             String key = dest.getKey();
             if (!(dest.speaker || dest.current)) {
-                e.putString(key, dest.getAddress());
+                if (dest.device==null) e.remove(key);
+                else e.putString(key, dest.getAddress());
             }
         }
         e.apply();
@@ -887,8 +963,12 @@ public class MainActivity extends AppCompatActivity {
         ListView lv = findViewById(R.id.soundList);
         if (lv != null) lv.setAdapter(mSounds);
         if (mCurrentDest.device != null && mCurrentDest.device.file != null) {
-            disconnectAll(mCurrentDest.device.file);
-            connectDevice(mCurrentDest.device.file);
+            if (!checkConnected()) {
+                if (!disconnectUnwanted()) {
+                    disconnectAll(mCurrentDest.device.file);
+                }
+                connectDevice(mCurrentDest.device.file);
+            }
         } else if (mCurrentDest.speaker) disconnectAll();
         mViewPager.setCurrentItem(3);
     }
@@ -919,6 +999,7 @@ public class MainActivity extends AppCompatActivity {
 
     public void play(DocumentFile file) {
         stopPlaying();
+        checkConnected();
         updateConnected();
         addln("Loading player...");
         mPlayer = MediaPlayer.create(this, file.getUri());
