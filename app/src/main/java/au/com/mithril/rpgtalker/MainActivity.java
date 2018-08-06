@@ -1,11 +1,11 @@
 package au.com.mithril.rpgtalker;
 
+import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.bluetooth.BluetoothA2dp;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothHeadset;
-import android.bluetooth.BluetoothHidDeviceAppSdpSettings;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.BluetoothSocket;
 import android.content.BroadcastReceiver;
@@ -16,6 +16,9 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.media.AudioDeviceCallback;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -26,9 +29,7 @@ import android.os.ParcelUuid;
 import android.preference.PreferenceManager;
 import android.provider.DocumentsContract;
 import android.support.annotation.Nullable;
-import android.support.annotation.RequiresApi;
 import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
 import android.support.v4.provider.DocumentFile;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
@@ -38,21 +39,17 @@ import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentPagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.os.Bundle;
-import android.util.ArraySet;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 
 import android.webkit.WebView;
 import android.widget.ArrayAdapter;
-import android.widget.ListAdapter;
 import android.widget.ListView;
 import android.widget.Spinner;
 import android.widget.TextView;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.FileNameMap;
@@ -65,7 +62,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
-import java.util.SortedSet;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
@@ -96,6 +92,9 @@ public class MainActivity extends AppCompatActivity {
     public final static ArrayList<DevHolder> devices = new ArrayList<DevHolder>();
     static MediaPlayer mPlayer;
     SharedPreferences mPreferences;
+    AudioManager mAudio;
+    AudioDeviceInfo mOutputAudio =null;
+
 
 
     /**
@@ -202,12 +201,17 @@ public class MainActivity extends AppCompatActivity {
             }
         }, 10000, 30000); // Check every 30 seconds.
         updateDeviceList();
+        mAudio= (AudioManager) getSystemService(AUDIO_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            mAudio.registerAudioDeviceCallback(mAudioCallback, null);
+        }
         String gString = mPreferences.getString("globalfolder", null);
         if (gString != null) {
             mGlobalUri = Uri.parse(gString);
         }
         setSoundFolder(mPreferences.getString("soundfolder", null));
         setHfpStrategy(mPreferences.getBoolean("hfpstrategy",false));
+
     }
 
     // This is called from timer thread.
@@ -277,6 +281,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         mTimer.cancel();
         unregisterReceiver(mReceiver);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            mAudio.unregisterAudioDeviceCallback(mAudioCallback);
+        }
         mBluetoothAdapter.cancelDiscovery();
         if (mHfp!=null) {
             mHfp.closeSocket();
@@ -833,13 +840,26 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /** Force the selected device to be active... I hope. */
+    /** Force the selected device to be active*/
+    @SuppressLint("NewApi")
     public boolean checkConnected() {
+        mOutputAudio =null;
         if (mCurrentDest==null || mCurrentDest.device==null || mCurrentDest.speaker || mCurrentDest.current) return false;
         if (mA2DP==null) return false;
         BluetoothDevice currdevice=mCurrentDest.device.file;
         List<BluetoothDevice> dlist= mA2DP.getConnectedDevices();
         if (dlist.size()<1) return false;
+        // If >=28, can select preferred output.
+        if (Build.VERSION.SDK_INT >= 28) {
+            AudioDeviceInfo[] list = mAudio.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+            for(AudioDeviceInfo info : list) {
+                if (info.getType()==AudioDeviceInfo.TYPE_BLUETOOTH_A2DP && info.getAddress().equals(currdevice.getAddress())) {
+                    mOutputAudio=info;
+                    return true;
+                }
+            }
+        }
+
         BluetoothDevice active=dlist.get(dlist.size()-1); // Empirically, last device on list is the the active one.
         if (active.getAddress().equals(currdevice.getAddress())) return true; // That should be OK.
         disconnectA2DP(currdevice);
@@ -1003,9 +1023,37 @@ public class MainActivity extends AppCompatActivity {
         updateConnected();
         addln("Loading player...");
         mPlayer = MediaPlayer.create(this, file.getUri());
+        if (Build.VERSION.SDK_INT >= 28) {
+            if (mOutputAudio != null) {
+                mPlayer.setPreferredDevice(mOutputAudio);
+            }
+        }
         mPlayer.start();
         addln("Playing.");
     }
+
+    private AudioDeviceCallback mAudioCallback = new AudioDeviceCallback() {
+        @SuppressLint("NewApi")
+        @Override
+        public void onAudioDevicesAdded(AudioDeviceInfo[] addedDevices) {
+            addln("Audio device added");
+            for (AudioDeviceInfo info : addedDevices) {
+                addln(info.getAddress()+" "+info.getProductName());
+            }
+            super.onAudioDevicesAdded(addedDevices);
+        }
+
+        @SuppressLint("NewApi")
+        @Override
+        public void onAudioDevicesRemoved(AudioDeviceInfo[] removedDevices) {
+            addln("Audio Device removed.");
+            for (AudioDeviceInfo info : removedDevices) {
+                addln(info.getAddress()+" "+info.getProductName());
+            }
+            super.onAudioDevicesRemoved(removedDevices);
+        }
+    };
+
 
     public class MyReceiver extends BroadcastReceiver {
         @Override
